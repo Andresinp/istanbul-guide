@@ -226,7 +226,7 @@
   });
 
   // ------------------------------------------------------------------ boot
-  fetch('data.json?v=237e799f').then(function (r) { return r.json(); }).then(function (d) {
+  fetch('data.json?v=3a8e26de').then(function (r) { return r.json(); }).then(function (d) {
     state.cats = GC.cats = d.cats; state.all = d.places; d.places.forEach(function (p) { GC.byN[p.n] = p; }); state.who_list = GC.who = d.who || [];
     state.all.forEach(function (p) { state.markers[p.n] = new maplibregl.Marker({ element: pinEl(p), anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map); });
     urlFilters();
