@@ -1,5 +1,6 @@
 /* City guide maps for the area / type / friend pages: same look as near.html (MapLibre + OpenFreeMap positron,
-   white pins with one category-colour ring), no card sheet. Tap a pin for a small popup. Needs MapLibre GL. */
+   white pins with one category-colour ring). Tapping a pin opens the same place card as near.html (cards.js), over the map.
+   Needs MapLibre GL and cards.js; the card data (data.json) is fetched on the first tap. */
 (function () {
   'use strict';
   var CAT = window.ATH_CATS || {};
@@ -11,12 +12,40 @@
     var r = Math.PI / 180, x = Math.sin((c - a) * r / 2), y = Math.sin((d - b) * r / 2);
     return 12742 * Math.asin(Math.sqrt(x * x + Math.cos(a * r) * Math.cos(c * r) * y * y));
   }
-  function popup(p) {
-    var c = CAT[p.cat] || {};
-    return '<div class="pop"><b>' + esc(p.name) + '</b><span>' + (c.e || '') + ' ' + esc(c.label || '') +
-      (p.price ? ' · ' + esc(p.price) : '') + (p.rating ? ' · ★ ' + esc(p.rating) : '') + '</span>' +
-      (p.closed ? '<span class="warn">⏸ ' + esc(p.closed) + '</span>' : '') +
-      '<span class="pl"><a href="' + esc(p.page) + '">Details</a><a target="_blank" rel="noopener" href="' + esc(p.link) + '">Google Maps ↗</a></span></div>';
+  // ---- place card over the map (same card as near.html)
+  var GC = window.GuideCards, dataP = null;
+  function data() {
+    if (!dataP) dataP = fetch(window.ATH_DATA || 'data.json').then(function (r) { return r.json(); }).then(function (d) {
+      GC.cats = d.cats; GC.noDist = true; GC.who = d.who || []; d.places.forEach(function (p) { GC.byN[p.n] = p; }); return d;
+    });
+    return dataP;
+  }
+  function cardBox(el, map) {
+    if (el._card) return el._card;
+    var box = document.createElement('div'); box.className = 'gc mapcard'; box.hidden = true;
+    el.parentNode.appendChild(box); el._card = box;
+    GC.wireCarousels(box);
+    box.addEventListener('click', function (e) {
+      if (e.target.closest('.x')) { closeCard(el); return; }
+      GC.toggleInfo(e);
+    });
+    map.on('click', function () { closeCard(el); });
+    return box;
+  }
+  function closeCard(el) {
+    if (!el._card || el._card.hidden) return;
+    el._card.hidden = true; el._card.innerHTML = '';
+    el.querySelectorAll('.pin.on').forEach(function (x) { x.classList.remove('on'); });
+  }
+  function openCard(el, map, n, pin) {
+    var box = cardBox(el, map);
+    data().then(function () {
+      var p = GC.byN[n]; if (!p) return;
+      box.innerHTML = GC.cardHTML(p).replace('aria-label="Hide cards"', 'aria-label="Close card"'); box.hidden = false;
+      el.querySelectorAll('.pin.on').forEach(function (x) { x.classList.remove('on'); }); pin.classList.add('on');
+      var first = function () { var s = box.querySelector('.slides'); if (s) GC.loadG(s, 0); };
+      GC.gList(p, box, first); setTimeout(first, 250);
+    }).catch(function () { location.href = pin.dataset.page; });   // no data: fall back to the place's entry in its area page
   }
   window.AthensMap = function (id, pts, opt) {
     opt = opt || {};
@@ -57,8 +86,9 @@
       btn.type = 'button'; btn.className = 'pin' + (p.closed ? ' pin-off' : ''); btn.style.setProperty('--c', c.col || '#555');
       btn.setAttribute('aria-label', p.n + '. ' + p.name);
       btn.innerHTML = '<span class="pe">' + (c.e || '📍') + '</span><b class="pn">' + p.n + '</b>';
-      var m = new maplibregl.Marker({ element: wrap, anchor: 'center' }).setLngLat([p.lon, p.lat])
-        .setPopup(new maplibregl.Popup({ offset: 18, closeButton: false, maxWidth: '240px' }).setHTML(popup(p))).addTo(map);
+      btn.dataset.page = p.page;
+      btn.addEventListener('click', function (e) { e.stopPropagation(); openCard(el, map, p.n, btn); });
+      var m = new maplibregl.Marker({ element: wrap, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map);
       m._p = p; markers.push(m);
     });
 
@@ -70,15 +100,15 @@
       var catOk = activeCats[p.cat] || (p.also || []).some(function (c) { return activeCats[c]; });
       return catOk && (who === 'all' || p.by.indexOf(who) >= 0);
     }
-    function refresh() { markers.forEach(function (m) { m.getElement().style.display = visible(m._p) ? '' : 'none'; if (!visible(m._p)) m.getPopup().remove(); }); }
+    function refresh() { closeCard(el); markers.forEach(function (m) { m.getElement().style.display = visible(m._p) ? '' : 'none'; }); }
     if (bar) {
       var cats = {}; pts.forEach(function (p) { cats[p.cat] = 1; (p.also || []).forEach(function (c) { cats[c] = 1; }); });
       var html = '<div class="frow"><span class="flbl">Show</span><button class="on" data-all="1">All</button>';
       Object.keys(CAT).forEach(function (k) { if (cats[k]) html += '<button class="on" data-cat="' + k + '" style="--c:' + CAT[k].col + '">' + CAT[k].e + ' ' + CAT[k].short + '</button>'; });
-      var WHO = ['all'].concat(window.ATH_WHO || []);
-      html += '</div><div class="frow"><span class="flbl">' + (WHO.length > 2 ? 'From' : '') + '</span>';
-      (WHO.length > 2 ? WHO : []).forEach(function (w) { html += '<button data-who="' + w + '" class="' + (w === 'all' ? 'on' : '') + '">' + (w === 'all' ? 'Everyone' : w) + '</button>'; });
-      html += '<a class="near" href="near.html">📍 Near me</a></div>';
+      var WHO = window.ATH_WHO || [];
+      if (WHO.length > 1) html += '</div><div class="frow"><span class="flbl">From</span>';   // one person's list: no friend row
+      (WHO.length > 1 ? ['all'].concat(WHO) : []).forEach(function (w) { html += '<button data-who="' + w + '" class="' + (w === 'all' ? 'on' : '') + '">' + (w === 'all' ? 'Everyone' : w) + '</button>'; });
+      html += '</div>';   // "⛶ Full screen" sits on the map itself
       bar.innerHTML = html;
       bar.addEventListener('click', function (e) {
         var t = e.target.closest('button'); if (!t) return;
