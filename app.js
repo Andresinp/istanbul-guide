@@ -44,7 +44,7 @@
       box.innerHTML = GC.cardHTML(p).replace('aria-label="Hide cards"', 'aria-label="Close card"'); box.hidden = false;
       el.querySelectorAll('.pin.on').forEach(function (x) { x.classList.remove('on'); }); pin.classList.add('on');
       var first = function () { var s = box.querySelector('.slides'); if (s) GC.loadG(s, 0); };
-      GC.gList(p, box, first); setTimeout(first, 250);
+      first(); GC.gList(p, box, first); setTimeout(first, 250);   // list already fetched: the image starts at once
     }).catch(function () { location.href = pin.dataset.page; });   // no data: fall back to the place's entry in its area page
   }
   window.AthensMap = function (id, pts, opt) {
@@ -91,6 +91,17 @@
       var m = new maplibregl.Marker({ element: wrap, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map);
       m._p = p; markers.push(m);
     });
+    // photo lists are free: once the map is on screen, fetch them for the pins in view so a tapped card only waits for its image
+    if (window.IntersectionObserver && window.ATH_GKEY && pts.length) {
+      var io = new IntersectionObserver(function (es) {
+        if (!es[0].isIntersecting) return; io.disconnect();
+        data().then(function () {
+          var bb = map.getBounds(), off = document.createElement('div');   // off-screen root: nothing to redraw yet
+          pts.forEach(function (q) { var p = GC.byN[q.n]; if (p && bb.contains([q.lon, q.lat])) GC.gList(p, off); });
+        }).catch(function () {});
+      }, { threshold: 0.3 });
+      io.observe(el);
+    }
 
     // ---- filters (type + friend); "Near me" opens the full-screen page
     var bar = opt.filters && document.getElementById(id + '-f');

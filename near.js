@@ -110,15 +110,16 @@
     m.getElement().classList.add('on'); m.getElement().firstChild.classList.add('on');
     if (fly !== false) map.easeTo({ center: [p.lon, p.lat], offset: [0, -sheetH() / 2 + 20], duration: 600 });
     for (var k = i - 1; k <= i + 3; k++) if (state.list[k]) gList(state.list[k]);   // photo lists are free: fetch ahead
-    clearTimeout(gT); gT = setTimeout(function () { var s = track.querySelector('.slides[data-n="' + p.n + '"]'); if (s) loadG(s, 0); }, 250);
+    clearTimeout(gT); gT = setTimeout(function () { first(p); first(state.list[i + 1]); }, 250);   // this card, and the next one so it arrives ready
   }
 
   var gT;
   function gList(p) {
     GC.gList(p, track, function () {
-      if (state.list[state.active] === p) { var s = track.querySelector('.slides[data-n="' + p.n + '"]'); if (s) loadG(s, 0); }
+      var a = state.active; if (state.list[a] === p || state.list[a + 1] === p) first(p);
     });
   }
+  function first(p) { var s = p && track.querySelector('.slides[data-n="' + p.n + '"]'); if (s) loadG(s, 0); }
   var loadG = GC.loadG;
 
   var scrollT;
@@ -226,7 +227,7 @@
   });
 
   // ------------------------------------------------------------------ boot
-  fetch('data.json?v=a16f5442').then(function (r) { return r.json(); }).then(function (d) {
+  fetch('data.json?v=1746beb7').then(function (r) { return r.json(); }).then(function (d) {
     state.cats = GC.cats = d.cats; state.all = d.places; d.places.forEach(function (p) { GC.byN[p.n] = p; }); state.who_list = GC.who = d.who || [];
     state.all.forEach(function (p) { state.markers[p.n] = new maplibregl.Marker({ element: pinEl(p), anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map); });
     urlFilters();

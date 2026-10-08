@@ -23,7 +23,7 @@
     }
     p.gl = p.gl || {};
     var slides = s.map(function (ph, i) {
-      var src = ph.g ? (p.gl[i] ? ' src="' + gURL(ph.g) + '"' : '') + ' data-g="' + esc(ph.g) + '"' : ' src="' + esc(ph.url) + '"' + (i ? ' loading="lazy"' : '');
+      var src = ph.g ? (p.gl[i] && gKept(ph.g) ? ' src="' + esc(gKept(ph.g)) + '"' : '') + ' data-g="' + esc(ph.g) + '"' : ' src="' + esc(ph.url) + '"' + (i ? ' loading="lazy"' : '');
       return '<figure class="slide"><img decoding="async"' + src + ' alt="' + esc(p.name) + '" onerror="this.closest(\'.slide\').classList.add(\'broken\')">' +
         '<figcaption>' + esc(ph.credit) + '</figcaption></figure>';
     }).join('');
@@ -73,7 +73,7 @@
   // Key in places-key.js (window.ATH_GKEY), locked to this site and to Places API (New). A place's photo list is free
   // (Place Details "IDs only"); each image shown counts towards the free monthly allowance. An image is requested only
   // when its slide is on screen; G_DAY caps images per day on this device; the real ceiling is the daily quota in Google Cloud.
-  var G_DAY = 150, G_W = 720;
+  var G_DAY = 150, G_W = 600;   // 600 px: sharp on a phone card, about half the bytes of 720
   function gURL(name) { return 'https://places.googleapis.com/v1/' + name + '/media?maxWidthPx=' + G_W + '&key=' + window.ATH_GKEY; }
   function gBudget(take) {
     var k = 'gph-' + new Date().toISOString().slice(0, 10), n = G_DAY;
@@ -87,27 +87,47 @@
   }
   // fetch a place's photo list (free); when it arrives, redraw that card's photo box inside root and call done(p)
   GC.gList = function (p, root, done) {
-    if (!window.ATH_GKEY || !p.gid || p.gp || p._gq || (p.photos || []).length >= 3) return;
+    if (!window.ATH_GKEY || !p.gid || p.gp || (p.photos || []).length >= 3) return;
+    (p._gw = p._gw || []).push([root, done]);   // everyone waiting for this list (a prefetch and a tapped card can overlap)
+    if (p._gq) return;
     var key = 'gpl-' + p.gid, kept = null;   // a place's photo list is kept for the visit, so other pages don't ask Google again
     try { kept = JSON.parse(sessionStorage.getItem(key)); } catch (e) {}
-    if (kept) { p.gp = kept; var b0 = root.querySelector('.card[data-n="' + p.n + '"] .ph'); if (b0 && kept.length) { b0.outerHTML = GC.photosHTML(p); if (done) done(p); } return; }
+    if (kept) return got(p, kept);
     p._gq = 1;
     fetch('https://places.googleapis.com/v1/places/' + p.gid + '?fields=photos&key=' + window.ATH_GKEY)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         var ph = (d && d.photos || []).map(function (x) { var a = (x.authorAttributions || [])[0] || {}; return { name: x.name, author: a.displayName || '' }; });
         ph.forEach(function (x, i) { x.o = isOwner(p, x.author) ? 0 : 1; x.i = i; });
-        p.gp = ph.sort(function (a, b) { return a.o - b.o || a.i - b.i; });   // owner's photos first, then Google's own order
-        if (d) try { sessionStorage.setItem(key, JSON.stringify(p.gp)); } catch (e) {}
-        var box = root.querySelector('.card[data-n="' + p.n + '"] .ph');
-        if (box && p.gp.length) { box.outerHTML = GC.photosHTML(p); if (done) done(p); }
+        ph.sort(function (a, b) { return a.o - b.o || a.i - b.i; });   // owner's photos first, then Google's own order
+        if (d) try { sessionStorage.setItem(key, JSON.stringify(ph)); } catch (e) {}
+        got(p, ph);
       }).catch(function () { p._gq = 0; });
   };
+  function got(p, ph) {   // the list arrived: redraw the card's photo box wherever it is shown, then call done(p)
+    p.gp = ph; var w = p._gw || []; p._gw = [];
+    w.forEach(function (x) {
+      var box = x[0].querySelector('.card[data-n="' + p.n + '"] .ph');
+      if (box && ph.length) { box.outerHTML = GC.photosHTML(p); if (x[1]) x[1](p); }
+    });
+  }
+  // An image's final address (lh3.googleusercontent.com) is kept for the visit: the same photo on another page shows
+  // straight from the browser cache, with no Google call and nothing counted against the quota.
+  var GQ = {}, GU = {};   // GQ: images already asked for; GU: addresses already known on this page (also when storage is blocked)
+  function gKept(name) { if (GU[name]) return GU[name]; try { return sessionStorage.getItem('gpu-' + name); } catch (e) { return null; } }
   GC.loadG = function (s, i) {
     var img = s.querySelectorAll('img')[i];
-    if (!img || !img.dataset.g || img.getAttribute('src') || !gBudget(true)) return;
-    var p = GC.byN[+s.dataset.n];
-    img.src = gURL(img.dataset.g); if (p) p.gl[i] = 1;
-    GC.shown++;
+    if (!img || !img.dataset.g || img.getAttribute('src')) return;
+    var p = GC.byN[+s.dataset.n], name = img.dataset.g, kept = gKept(name);
+    if (kept) { img.src = kept; if (p) p.gl[i] = 1; return; }
+    if (GQ[name] || !gBudget(true)) return;   // GQ: already asked, answer on its way
+    GQ[name] = 1; if (p) p.gl[i] = 1; GC.shown++;
+    fetch(gURL(name) + '&skipHttpRedirect=true').then(function (r) { return r.ok ? r.json() : null; })   // one Google call per image, as before
+      .then(function (d) {
+        if (!d || !d.photoUri) return;
+        GU[name] = d.photoUri; try { sessionStorage.setItem('gpu-' + name, d.photoUri); } catch (e) {}
+        var now = document.querySelectorAll('img[data-g="' + name + '"]');   // the card may have been redrawn meanwhile
+        (now.length ? now : [img]).forEach(function (x) { if (!x.getAttribute('src')) x.src = d.photoUri; });
+      }).catch(function () { GQ[name] = 0; });
   };
 })();
