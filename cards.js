@@ -88,6 +88,9 @@
   // fetch a place's photo list (free); when it arrives, redraw that card's photo box inside root and call done(p)
   GC.gList = function (p, root, done) {
     if (!window.ATH_GKEY || !p.gid || p.gp || p._gq || (p.photos || []).length >= 3) return;
+    var key = 'gpl-' + p.gid, kept = null;   // a place's photo list is kept for the visit, so other pages don't ask Google again
+    try { kept = JSON.parse(sessionStorage.getItem(key)); } catch (e) {}
+    if (kept) { p.gp = kept; var b0 = root.querySelector('.card[data-n="' + p.n + '"] .ph'); if (b0 && kept.length) { b0.outerHTML = GC.photosHTML(p); if (done) done(p); } return; }
     p._gq = 1;
     fetch('https://places.googleapis.com/v1/places/' + p.gid + '?fields=photos&key=' + window.ATH_GKEY)
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -95,6 +98,7 @@
         var ph = (d && d.photos || []).map(function (x) { var a = (x.authorAttributions || [])[0] || {}; return { name: x.name, author: a.displayName || '' }; });
         ph.forEach(function (x, i) { x.o = isOwner(p, x.author) ? 0 : 1; x.i = i; });
         p.gp = ph.sort(function (a, b) { return a.o - b.o || a.i - b.i; });   // owner's photos first, then Google's own order
+        if (d) try { sessionStorage.setItem(key, JSON.stringify(p.gp)); } catch (e) {}
         var box = root.querySelector('.card[data-n="' + p.n + '"] .ph');
         if (box && p.gp.length) { box.outerHTML = GC.photosHTML(p); if (done) done(p); }
       }).catch(function () { p._gq = 0; });

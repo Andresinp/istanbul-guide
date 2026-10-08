@@ -120,6 +120,52 @@
         refresh();
       });
     }
+    // ---- "locate me" on the map (blue dot that follows you) + "Nearest to me" sort for the list under the map
+    var geo = new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true, timeout: 15000 }, trackUserLocation: true, showAccuracyCircle: false });
+    map.addControl(geo, 'top-right');
+    var me = null, wantSort = false, sortOut = opt.sort && document.getElementById(id + '-near'), list = null, near = null;   // the list comes after this script: looked up on first use
+    geo.on('geolocate', function (pos) {
+      me = [pos.coords.latitude, pos.coords.longitude];
+      if (wantSort) { wantSort = false; sortNear(); } else if (near && !near.hidden) distances();
+    });
+    geo.on('error', function () { if (wantSort) { wantSort = false; setMode(false); msg('Turn on location to sort by distance.'); } });
+    function walk(m) {   // same estimate as near.html: straight line × 1.3, 80 m a minute
+      var min = Math.max(1, Math.round(m * 1.3 / 80)), d = m < 1000 ? (Math.round(m / 10) * 10) + ' m' : (m / 1000).toFixed(1) + ' km';
+      return min > 60 ? d + ' · metro/taxi' : d + ' · ' + min + ' min walk';
+    }
+    function ll(c) { return c.dataset.ll.split(',').map(Number); }
+    function msg(t) { var m = sortOut.querySelector('.smsg'); if (m) m.textContent = t || ''; }
+    function setMode(isNear) {
+      if (!list) return;
+      sortOut.querySelectorAll('[data-sort]').forEach(function (b) { b.classList.toggle('on', (b.dataset.sort === 'near') === isNear); });
+      list.hidden = isNear; if (near) near.hidden = !isNear;
+    }
+    function distances() {
+      near.querySelectorAll('.card').forEach(function (c) { var q = ll(c); c.querySelector('.dist-b').textContent = '📍 ' + walk(km(me[0], me[1], q[0], q[1]) * 1000); });
+    }
+    function sortNear() {   // a copy of the list, one card per place, nearest first; the original grouped list stays as it was
+      var seen = {}, cards = [].filter.call(list.querySelectorAll('.card[data-ll]'), function (c) { return seen[c.id] ? false : (seen[c.id] = 1); });
+      cards.sort(function (a, b) { var p = ll(a), q = ll(b); return km(me[0], me[1], p[0], p[1]) - km(me[0], me[1], q[0], q[1]); });
+      if (!near) { near = document.createElement('div'); near.className = 'plist-near'; list.parentNode.insertBefore(near, list.nextSibling); }
+      near.innerHTML = '';
+      cards.forEach(function (c) {
+        var k = c.cloneNode(true); k.removeAttribute('id');
+        var d = document.createElement('div'); d.className = 'dist-b'; k.querySelector('h3').after(d); near.appendChild(k);
+      });
+      distances(); setMode(true); msg('Nearest first from where you are.');
+    }
+    if (sortOut) {
+      sortOut.innerHTML = '<div class="filters-bar sortbar"><span class="flbl">Sort</span><button type="button" class="on" data-sort="list">' + esc(opt.sort) +
+        '</button><button type="button" data-sort="near">📍 Nearest to me</button><span class="smsg"></span></div>';
+      sortOut.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-sort]'); if (!b) return;
+        list = list || document.querySelector('.plist'); if (!list) return;
+        if (b.dataset.sort === 'list') { setMode(false); msg(''); return; }
+        if (me) { sortNear(); return; }
+        if (!('geolocation' in navigator)) { msg('Location is not available on this device.'); return; }
+        wantSort = true; msg('Finding you…'); geo.trigger();   // also shows you on the map
+      });
+    }
     return map;
   };
 })();
