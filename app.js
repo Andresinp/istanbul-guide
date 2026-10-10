@@ -111,7 +111,25 @@
       var catOk = activeCats[p.cat] || (p.also || []).some(function (c) { return activeCats[c]; });
       return catOk && (who === 'all' || p.by.indexOf(who) >= 0);
     }
-    function refresh() { closeCard(el); markers.forEach(function (m) { m.getElement().style.display = visible(m._p) ? '' : 'none'; }); }
+    var byN = {}; pts.forEach(function (p) { byN[p.n] = p; });
+    function refresh() { closeCard(el); markers.forEach(function (m) { m.getElement().style.display = visible(m._p) ? '' : 'none'; }); filterList(); }
+    // the list under the map follows the same filters: cards hide, and a heading hides when nothing under it is left
+    function filterList() {
+      var all = Object.keys(activeCats).every(function (k) { return activeCats[k]; }) && who === 'all', shown = {}, total = {};
+      document.querySelectorAll('.plist, .plist-near').forEach(function (box) {
+        var head = [], left = 0;
+        function close() { head.forEach(function (h) { h.hidden = !left; }); head = []; left = 0; }
+        [].forEach.call(box.children, function (c) {
+          if (!c.classList.contains('card')) { if (c.tagName === 'H2') close(); head.push(c); return; }
+          var p = byN[+(c.dataset.n || c.id.slice(1))], ok = all || (p ? visible(p) : false);
+          c.hidden = !ok; if (ok) left++;
+          if (p) { total[p.n] = 1; if (ok) shown[p.n] = 1; }
+        });
+        close();
+      });
+      var out = sortOut && sortOut.querySelector('.fcount'), n = Object.keys(shown).length, t = Object.keys(total).length;
+      if (out) out.textContent = all ? '' : (n ? 'Showing ' + n + ' of ' + t + ' places' : 'No places match these filters');
+    }
     if (bar) {
       var cats = {}; pts.forEach(function (p) { cats[p.cat] = 1; (p.also || []).forEach(function (c) { cats[c] = 1; }); });
       var html = '<div class="frow"><span class="flbl">Show</span><button class="on" data-all="1">All</button>';
@@ -160,14 +178,14 @@
       if (!near) { near = document.createElement('div'); near.className = 'plist-near'; list.parentNode.insertBefore(near, list.nextSibling); }
       near.innerHTML = '';
       cards.forEach(function (c) {
-        var k = c.cloneNode(true); k.removeAttribute('id');
+        var k = c.cloneNode(true); k.dataset.n = c.id.slice(1); k.removeAttribute('id'); k.hidden = false;
         var d = document.createElement('div'); d.className = 'dist-b'; k.querySelector('h3').after(d); near.appendChild(k);
       });
-      distances(); setMode(true); msg('Nearest first from where you are.');
+      distances(); filterList(); setMode(true); msg('Nearest first from where you are.');
     }
     if (sortOut) {
       sortOut.innerHTML = '<div class="filters-bar sortbar"><span class="flbl">Sort</span><button type="button" class="on" data-sort="list">' + esc(opt.sort) +
-        '</button><button type="button" data-sort="near">📍 Nearest to me</button><span class="smsg"></span></div>';
+        '</button><button type="button" data-sort="near">📍 Nearest to me</button><span class="smsg"></span><span class="fcount"></span></div>';
       sortOut.addEventListener('click', function (e) {
         var b = e.target.closest('[data-sort]'); if (!b) return;
         list = list || document.querySelector('.plist'); if (!list) return;
