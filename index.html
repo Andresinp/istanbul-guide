@@ -80,9 +80,11 @@ text-decoration:none;font:600 13.5px/1 -apple-system,BlinkMacSystemFont,"Segoe U
 .status{background:#fdecea;color:#8a1c12;border-radius:8px;padding:5px 10px;font-size:13.5px;margin:6px 0}
 .card.off{opacity:.85}.pop span{color:#555;font-size:12px}
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]) .status{background:#3a1e1c;color:#ffb4a8}}
+h1.zh{display:flex;align-items:center;gap:10px}h1.zh span{flex:1;min-width:0;text-align:center}
+h1.zh .arr{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);text-decoration:none;color:var(--acc);font-size:22px;line-height:1;background:var(--card)}
 @media (max-width:600px){h1{font-size:28px}.map{height:360px}.flbl{width:auto}}
 </style></head>
-<body><nav class="top"><button class="nv l" type="button" aria-label="Scroll menu left">‹</button><div class="wrap"><a href="index.html" class="on">🏠 Start</a><a href="near.html" class="">📍 Near me</a><a href="cihangir.html" class="">🗺️ Areas</a><a href="events.html" class="">📅 What's on</a><a href="follow.html" class="">📲 Follow</a><a href="about.html" class="">ℹ️ About</a></div><button class="nv r" type="button" aria-label="Scroll menu right">›</button><i class="nbar" aria-hidden="true"><b></b></i></nav><script>(function(){var n=document.currentScript.previousElementSibling,w=n.querySelector('.wrap'),b=n.querySelector('.nbar b');
+<body><nav class="top"><button class="nv l" type="button" aria-label="Scroll menu left">‹</button><div class="wrap"><a href="index.html" class="on">🏠 Start</a><a href="near.html" class="">📍 Near me</a><a href="events.html" class="">📅 What's on</a><a href="follow.html" class="">📲 Follow</a><a href="about.html" class="">ℹ️ About</a></div><button class="nv r" type="button" aria-label="Scroll menu right">›</button><i class="nbar" aria-hidden="true"><b></b></i></nav><script>(function(){var n=document.currentScript.previousElementSibling,w=n.querySelector('.wrap'),b=n.querySelector('.nbar b');
 function u(){var m=w.scrollWidth-w.clientWidth;n.classList.toggle('can',m>2);n.classList.toggle('can-l',w.scrollLeft>2);n.classList.toggle('can-r',w.scrollLeft<m-2);
 if(m>2){b.style.width=(w.clientWidth/w.scrollWidth*100)+'%';b.style.left=(w.scrollLeft/w.scrollWidth*100)+'%';}}
 n.querySelector('.l').onclick=function(){w.scrollBy({left:-w.clientWidth*.7,behavior:'smooth'})};n.querySelector('.r').onclick=function(){w.scrollBy({left:w.clientWidth*.7,behavior:'smooth'})};
