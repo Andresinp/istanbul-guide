@@ -41,7 +41,8 @@
       (p.topics && p.topics.length ? '<p class="mut">Reviewers mention: ' + esc(p.topics.join(', ')) + '.</p>' : '') +
       (p.pp || prices ? '<p class="prices">💶 ' + esc([p.price_level, p.pp ? p.pp + ' per person (' + (p.ppSrc || 'Google') + ')' : ''].filter(Boolean).join(' · ')) + (prices ? '<br>' + prices : '') + '</p>' : '') +
       '<p class="mut">📍 ' + esc(p.address) + ' · ' + esc(p.zoneName) + '</p>' +
-      (p.website ? '<p><a href="' + esc(p.website) + '" target="_blank" rel="noopener">Website / Instagram ↗</a></p>' : '');
+      (p.website && p.website.indexOf('instagram.com') < 0 ? '<p><a href="' + esc(p.website) + '" target="_blank" rel="noopener">Website ↗</a></p>' : '') +
+      (p.ig ? '<p><a href="https://www.instagram.com/' + esc(p.ig) + '/" target="_blank" rel="noopener">📲 @' + esc(p.ig) + ' on Instagram ↗</a></p>' : '');
     var meta = [p.price_level, p.rating ? '★ ' + p.rating : ''].filter(Boolean).join(' · ');
     return '<article class="card" data-n="' + p.n + '" aria-label="' + esc(p.name) + '">' + GC.photosHTML(p) +
       '<div class="body"><div class="row1"><h2>' + esc(p.name) + '</h2><span class="price">' + esc(meta) + '</span></div>' +
