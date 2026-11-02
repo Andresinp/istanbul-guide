@@ -32,7 +32,8 @@
   };
   GC.cardHTML = function (p) {
     var by = p.by.join(' & ');
-    var chips = p.vibe ? '<span class="chip v-' + p.vibe + '">● ' + esc(p.vibeLabel) + '</span>' : '';   // secondary types sit on the photo
+    var chips = (p.oh && p.oh.length ? '<span class="chip oh' + (GC.openState(p).open ? ' on' : '') + '" data-oh="' + p.n + '">' + esc(GC.openText(p)) + '</span>' : '') +
+      (p.vibe ? '<span class="chip v-' + p.vibe + '">● ' + esc(p.vibeLabel) + '</span>' : '');   // secondary types sit on the photo
     var alerts = (p.status ? '<div class="alert">⏸ ' + esc(p.status) + ' on Google (checked 7 Oct 2026)</div>' : '') +
       (p.warning ? '<div class="alert">⚠ ' + esc(p.warning) + '</div>' : '');
     var prices = (p.prices || []).map(function (x) { return '<span>' + esc(x[0]) + ' <b>' + esc(x[1]) + '</b></span>'; }).join('');
@@ -52,6 +53,44 @@
       '<button type="button" class="mb" aria-expanded="false">Info ▾</button></div>' + alerts +
       '<div class="more" hidden>' + det + '</div></div></article>';
   };
+  // ------------------------------------------------------------------ open now / closed now
+  // p.oh: Google's regular weekly hours [[openDay, "HHMM", closeDay, "HHMM"], ...], day 0 = Sunday, in Istanbul local time
+  // (fetched at build time by tools/ghours.py, so no Google call here). The clock used is Istanbul time, wherever the phone is.
+  var WEEK = 7 * 1440, DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function cityNow() {
+    var f = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }), o = {};
+    f.formatToParts(new Date()).forEach(function (x) { o[x.type] = x.value; });
+    return DAYS.indexOf(o.weekday) * 1440 + (+o.hour) * 60 + (+o.minute);
+  }
+  function mins(d, hm) { return d * 1440 + (+hm.slice(0, 2)) * 60 + (+hm.slice(2)); }
+  function hhmm(m) { m = ((m % 1440) + 1440) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + m % 60).slice(-2); }
+  GC.openState = function (p, now) {
+    if (!p.oh || !p.oh.length) return null;
+    if (p.oh[0][3] === '24h') return { open: true, always: true };
+    now = now == null ? cityNow() : now;
+    var next = null;
+    for (var i = 0; i < p.oh.length; i++) {
+      var o = mins(p.oh[i][0], p.oh[i][1]), c = mins(p.oh[i][2], p.oh[i][3]);
+      if (c <= o) c += WEEK;   // closes after the week wraps (Saturday night into Sunday)
+      for (var k = -1; k <= 0; k++) {   // also check the copy of this period that started a week earlier
+        if (now >= o + k * WEEK && now < c + k * WEEK) return { open: true, until: c + k * WEEK, now: now };
+      }
+      var w = o > now ? o : o + WEEK;
+      if (next === null || w < next) next = w;
+    }
+    return { open: false, at: next, now: now };
+  };
+  GC.openText = function (p, now) {
+    var s = GC.openState(p, now); if (!s) return '';
+    if (s.always) return 'Open 24h';
+    if (s.open) return 'Open till ' + hhmm(s.until);
+    var today = Math.floor(s.at / 1440) === Math.floor(s.now / 1440);
+    return 'Closed · ' + (today ? 'opens ' : '') + (today ? '' : DAYS[Math.floor(s.at / 1440) % 7] + ' ') + hhmm(s.at);
+  };
+  // keep the chips right while a page stays open
+  setInterval(function () {
+    document.querySelectorAll('.chip.oh[data-oh]').forEach(function (el) { var p = GC.byN[+el.dataset.oh]; if (p) { el.textContent = GC.openText(p); el.classList.toggle('on', GC.openState(p).open); } });
+  }, 60000);
   // "Info ▾" toggle; returns true when the click was handled
   GC.toggleInfo = function (e) {
     var mb = e.target.closest('.mb'); if (!mb) return false;
